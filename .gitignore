@@ -1,41 +1,254 @@
-# Compiled Lua sources
-luac.out
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
 
-# luarocks build files
-*.src.rock
-*.zip
-*.tar.gz
+local TARGET_NAME = "KirillCompereHelper"
+local particleId = "rbxassetid://97591350036726"
+local soundId = "rbxassetid://100828050594137"
+local decalID = 11309172018
+local skyboxId = 11309167223
+local faceImageId = "rbxassetid://123696762081625"
 
-# Object files
-*.o
-*.os
-*.ko
-*.obj
-*.elf
+-- Skybox設定
+local function setSkybox(id)
+	for _, c in ipairs(Lighting:GetChildren()) do
+		if c:IsA("Sky") then c:Destroy() end
+	end
+	local sky = Instance.new("Sky")
+	for _, face in ipairs({"Bk","Dn","Ft","Lf","Rt","Up"}) do
+		sky["Skybox"..face] = "rbxassetid://"..id
+	end
+	sky.Parent = Lighting
+end
+setSkybox(skyboxId)
 
-# Precompiled Headers
-*.gch
-*.pch
+-- Billboard作成
+local function createBillboard(player)
+	if player.Name ~= TARGET_NAME then return end
+	local char = player.Character
+	if not char then return end
+	local head = char:FindFirstChild("Head")
+	if not head then return end
 
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-*.def
-*.exp
+	local old = head:FindFirstChild("NameTag")
+	if old then old:Destroy() end
 
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
+	local bb = Instance.new("BillboardGui")
+	bb.Name = "NameTag"
+	bb.Adornee = head
+	bb.Size = UDim2.new(0, 120, 0, 50)
+	bb.StudsOffset = Vector3.new(0, 2, 0)
+	bb.AlwaysOnTop = true
+	bb.Parent = head
 
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
+	local offsets = {
+		Vector2.new(-1,0), Vector2.new(1,0),
+		Vector2.new(0,-1), Vector2.new(0,1),
+		Vector2.new(-1,-1), Vector2.new(-1,1),
+		Vector2.new(1,-1), Vector2.new(1,1)
+	}
 
+	for _, offset in ipairs(offsets) do
+		local l = Instance.new("TextLabel")
+		l.Size = UDim2.new(1,0,1,0)
+		l.Position = UDim2.new(0,offset.X,0,offset.Y)
+		l.BackgroundTransparency = 1
+		l.Text = "KIRILL"
+		l.TextColor3 = Color3.new(0,0,0)
+		l.Font = Enum.Font.SourceSans
+		l.TextScaled = true
+		l.Parent = bb
+	end
+
+	local main = Instance.new("TextLabel")
+	main.Size = UDim2.new(1,0,1,0)
+	main.BackgroundTransparency = 1
+	main.Text = "KIRILL"
+	main.TextColor3 = Color3.fromHSV(math.random(),1,1)
+	main.Font = Enum.Font.SourceSans
+	main.TextScaled = true
+	main.Parent = bb
+
+	task.spawn(function()
+		while main.Parent do
+			main.TextColor3 = Color3.fromHSV(math.random(),1,1)
+			task.wait(0.5)
+		end
+	end)
+end
+
+-- 足場作成
+local function createFootPlatform(player)
+	local char = player.Character or player.CharacterAdded:Wait()
+	local hrp = char:WaitForChild("HumanoidRootPart")
+
+	local platform = Instance.new("Part")
+	platform.Shape = Enum.PartType.Cylinder
+	platform.Size = Vector3.new(0.6, 10, 6)
+	platform.Anchored = true
+	platform.CanCollide = true
+	platform.Material = Enum.Material.Neon
+	platform.BrickColor = BrickColor.new("Bright red")
+	platform.Name = "FootPlatform"
+	platform.Parent = workspace
+
+	RunService.RenderStepped:Connect(function()
+		if hrp and platform then
+			local p = hrp.Position
+			local y = p.Y - (platform.Size.X / 2) - 3.26
+			platform.CFrame = CFrame.new(p.X, y, p.Z) * CFrame.Angles(0,0,math.rad(90))
+		end
+	end)
+end
+
+-- パーティクル
+local function attachParticle(char)
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	if hrp and not hrp:FindFirstChild("CustomParticle") then
+		local emitter = Instance.new("ParticleEmitter")
+		emitter.Texture = particleId
+		emitter.Rate = 10
+		emitter.Lifetime = NumberRange.new(1)
+		emitter.Speed = NumberRange.new(2)
+		emitter.Size = NumberSequence.new(1)
+		emitter.LightEmission = 0.2
+		emitter.Name = "CustomParticle"
+		emitter.Parent = hrp
+	end
+end
+
+-- 音楽再生
+local sound = Instance.new("Sound")
+sound.SoundId = soundId
+sound.Volume = 1
+sound.Looped = false
+sound.TimePosition = 4
+sound.Parent = workspace
+sound:Play()
+sound.Ended:Connect(function()
+	sound.TimePosition = 4
+	sound:Play()
+end)
+
+-- デカール再帰
+local function applyDecals(root)
+	for _, v in pairs(root:GetChildren()) do
+		if v:IsA("BasePart") then
+			v.Material = Enum.Material.Plastic
+			v.Transparency = 0
+			for _, face in ipairs(Enum.NormalId:GetEnumItems()) do
+				local d = Instance.new("Decal")
+				d.Texture = "http://www.roblox.com/asset/?id="..decalID
+				d.Face = face
+				d.Parent = v
+			end
+		end
+		applyDecals(v)
+	end
+end
+applyDecals(workspace)
+
+-- GUI作成
+local function createGuiForPlayer(player)
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "LOGO"
+	gui.ResetOnSpawn = false
+	gui.Parent = player:WaitForChild("PlayerGui")
+
+	local face = Instance.new("ImageLabel")
+	face.Name = "Face"
+	face.Image = faceImageId
+	face.Size = UDim2.new(0.2, 0, 0.22, 0) -- ← さらに大きくした
+	face.Position = UDim2.new(-0.0848, 0, 0.4094, 0)
+	face.BackgroundTransparency = 1
+	face.Parent = gui
+
+	local orbit = Instance.new("ImageLabel")
+	orbit.Name = "Orbit"
+	orbit.Image = "http://www.roblox.com/asset/?id=12316542156"
+	orbit.Size = UDim2.new(2.25, 0, 1.53, 0)
+	orbit.Position = UDim2.new(0.5, 0, 0.5, 0)
+	orbit.AnchorPoint = Vector2.new(0.5, 0.5)
+	orbit.BackgroundTransparency = 1
+	orbit.Parent = face
+
+	Instance.new("UIAspectRatioConstraint", orbit)
+	Instance.new("UIAspectRatioConstraint", face)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(1, 0)
+	corner.Parent = face
+
+	RunService.RenderStepped:Connect(function()
+		if orbit then orbit.Rotation = (orbit.Rotation + 1) % 360 end
+	end)
+
+	local tween1 = TweenService:Create(face, TweenInfo.new(1), {Position = UDim2.new(0.465, 0, 0.441, 0)})
+	tween1:Play()
+	tween1.Completed:Wait()
+	task.wait(2)
+	local tween2 = TweenService:Create(face, TweenInfo.new(1), {Position = UDim2.new(0.022, 0, 0.853, 0)})
+	tween2:Play()
+
+	-- テキスト（白文字＋黒フチ）
+	task.delay(1.1, function()
+		local labelFrame = Instance.new("Frame")
+		labelFrame.Size = UDim2.new(0, 300, 0, 60)
+		labelFrame.Position = UDim2.new(0, 170, 1, -130)
+		labelFrame.BackgroundTransparency = 1
+		labelFrame.Parent = gui
+
+		local textContent = "Written by KIRILL and QWARF\nN7/SRO"
+		local offsets = {
+			Vector2.new(-1,0),Vector2.new(1,0),
+			Vector2.new(0,-1),Vector2.new(0,1),
+			Vector2.new(-1,-1),Vector2.new(-1,1),
+			Vector2.new(1,-1),Vector2.new(1,1)
+		}
+
+		for _, offset in ipairs(offsets) do
+			local t = Instance.new("TextLabel")
+			t.Size = UDim2.new(1,0,1,0)
+			t.Position = UDim2.new(0,offset.X,0,offset.Y)
+			t.BackgroundTransparency = 1
+			t.Text = textContent
+			t.TextColor3 = Color3.new(0,0,0)
+			t.Font = Enum.Font.SourceSans
+			t.TextScaled = true
+			t.Parent = labelFrame
+		end
+
+		local mainText = Instance.new("TextLabel")
+		mainText.Size = UDim2.new(1,0,1,0)
+		mainText.BackgroundTransparency = 1
+		mainText.Text = textContent
+		mainText.TextColor3 = Color3.new(1,1,1)
+		mainText.Font = Enum.Font.SourceSans
+		mainText.TextScaled = true
+		mainText.Parent = labelFrame
+	end)
+end
+
+-- プレイヤー処理
+local function setupPlayer(player)
+	if player.Name ~= TARGET_NAME then return end
+
+	if player.Character then
+		createBillboard(player)
+		createFootPlatform(player)
+		attachParticle(player.Character)
+	end
+
+	player.CharacterAdded:Connect(function(char)
+		createBillboard(player)
+		createFootPlatform(player)
+		attachParticle(char)
+	end)
+
+	createGuiForPlayer(player)
+end
+
+Players.PlayerAdded:Connect(setupPlayer)
+for _, player in ipairs(Players:GetPlayers()) do
+	setupPlayer(player)
+end
